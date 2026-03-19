@@ -1,0 +1,32 @@
+flowchart TD
+    A([User Query]) --> B[RAG Retrieval\nChromaDB vector store]
+    B --> C[Code Generator\nOpenAI GPT-4o]
+    C --> D[Execute Code\nSandboxed Python]
+    D -->|Success| E[Render Dashboard\nPlotly interactive chart]
+    D -->|Error| F{Attempt < 3?}
+    F -->|Yes| G[Self-Healing\nAI analyses error + fixes code]
+    G --> D
+    F -->|No| H([Show error + last code])
+    E --> I[Evaluator\nScore 0–10]
+    I --> J([Final output + metrics])
+
+    subgraph RAG_Layer [RAG Layer]
+        B
+        K[(ChromaDB\nvector store)]
+        L[Schema embeddings\nColumn stats\nSample rows]
+        L --> K
+        K --> B
+    end
+
+    subgraph Agent_Core [Agent Core — Semantic Kernel]
+        C
+        D
+        F
+        G
+    end
+
+    subgraph Output_Layer [Output Layer]
+        E
+        I
+        J
+    end
