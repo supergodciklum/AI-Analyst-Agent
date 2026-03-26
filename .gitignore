@@ -13,6 +13,9 @@ data/
 # Vector store (rebuilt on ingest)
 chroma_db/
 
+# Embedding cache (auto-generated on first dataset load)
+.cache/
+
 # macOS
 .DS_Store
 
