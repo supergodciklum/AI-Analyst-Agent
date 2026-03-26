@@ -3,11 +3,19 @@ AnalystAgent — the main orchestrator.
 
 Flow per query:
   1. RAG retrieval → schema context
-  2. CodeGeneratorTool → Python + Plotly code
+  2. CodeGeneratorTool.generate() with conversation history → Python + Plotly code
   3. SelfHealingExecutor → run code
   4. On failure → CodeGeneratorTool.fix() → retry (max 3 times)
-  5. Return result dict with fig, code, attempts, success
+  5. AI insight summary
+  6. Return full result dict
+
+Features:
+- Optional stream_callback for live code token streaming in the UI
+- Optional cost_tracker for recording API usage
+- Passes meta (dataset, query) to executor for error telemetry
 """
+
+from typing import Callable, Optional
 
 import pandas as pd
 from agent.rag_context import RAGContext
@@ -25,11 +33,12 @@ class AnalystAgent:
         azure_endpoint: str,
         embedding_deployment: str,
         llm_deployment: str,
+        cost_tracker=None,
     ):
-        self.api_key = api_key
         self.df = df
+        self.dataset_name = dataset_name
+        self.cost_tracker = cost_tracker
 
-        # Build RAG index
         self.rag = RAGContext(
             api_key=api_key,
             df=df,
@@ -37,6 +46,7 @@ class AnalystAgent:
             description=dataset_description,
             azure_endpoint=azure_endpoint,
             embedding_deployment=embedding_deployment,
+            cost_tracker=cost_tracker,
         )
         self.generator = CodeGeneratorTool(
             api_key=api_key,
@@ -45,22 +55,37 @@ class AnalystAgent:
         )
         self.executor = SelfHealingExecutor(df=df)
 
-    def run(self, query: str, log_callback=None) -> dict:
-        """
-        Execute a full agent run for a user query.
-        Returns: {
-            "success": bool,
-            "fig": plotly figure or None,
-            "code": last attempted code,
-            "attempts": int,
-            "last_error": str or None,
-        }
-        """
+        # Conversation memory — last N successful turns
+        self.conversation_history: list[dict] = []
+
+        # Expose cache flag for UI feedback
+        self.rag_from_cache: bool = self.rag._from_cache
+
+    # ── Query suggestions (called once after load) ────────────────────────────
+
+    def suggest_queries(self) -> list[str]:
+        schema = self.rag.full_schema_summary()
+        return self.generator.suggest_queries(
+            schema,
+            self.rag.dataset_name,
+            cost_tracker=self.cost_tracker,
+        )
+
+    # ── Main run loop ─────────────────────────────────────────────────────────
+
+    def run(
+        self,
+        query: str,
+        log_callback: Callable | None = None,
+        stream_callback: Callable[[str], None] | None = None,
+    ) -> dict:
         def log(type_, msg):
             if log_callback:
                 log_callback(type_, msg)
 
-        # ── Step 1: RAG retrieval ──────────────────────────────────────────
+        meta = {"dataset": self.dataset_name, "query": query}
+
+        # Step 1: RAG retrieval
         log("", "🔎 Retrieving schema context from vector store…")
         try:
             context = self.rag.retrieve(query, n_results=5)
@@ -69,15 +94,21 @@ class AnalystAgent:
             log("error", f"⚠️ RAG retrieval failed, using full schema. ({e})")
             context = self.rag.full_schema_summary()
 
-        # ── Step 2: Initial code generation ───────────────────────────────
+        # Step 2: Code generation (pass conversation history for follow-up support)
         log("", "🧠 Generating Python + Plotly code…")
-        code = self.generator.generate(query=query, schema_context=context)
+        code = self.generator.generate(
+            query=query,
+            schema_context=context,
+            history=self.conversation_history,
+            stream_callback=stream_callback,
+            cost_tracker=self.cost_tracker,
+        )
         log("", f"📝 Code generated ({len(code.splitlines())} lines).")
 
         last_error = None
         attempt = 0
 
-        # ── Step 3: Self-healing execution loop ───────────────────────────
+        # Step 3: Self-healing execution loop
         while attempt < MAX_ATTEMPTS:
             attempt += 1
             if attempt == 1:
@@ -85,14 +116,25 @@ class AnalystAgent:
             else:
                 log("retry", f"🔄 Attempt {attempt}/{MAX_ATTEMPTS} — retrying with fixed code…")
 
-            result = self.executor.execute(code, log_callback=log_callback)
+            result = self.executor.execute(code, log_callback=log_callback, meta=meta)
 
             if result["success"]:
                 log("success", f"✅ Execution succeeded on attempt {attempt}.")
                 log("", "📝 Generating insight summary…")
                 summary = self.generator.summarize(
-                    query=query, schema_context=context, code=code
+                    query=query,
+                    schema_context=context,
+                    code=code,
+                    cost_tracker=self.cost_tracker,
                 )
+
+                # Save to conversation history for future follow-ups
+                self.conversation_history.append({
+                    "query": query,
+                    "code": code,
+                    "summary": summary,
+                })
+
                 return {
                     "success": True,
                     "fig": result["fig"],
@@ -102,7 +144,6 @@ class AnalystAgent:
                     "summary": summary,
                 }
 
-            # Execution failed — capture error and ask for a fix
             last_error = result["error"]
             if attempt < MAX_ATTEMPTS:
                 log("retry", f"🔧 Asking AI to fix the error… ({attempt}/{MAX_ATTEMPTS - 1} fix attempts)")
@@ -111,15 +152,19 @@ class AnalystAgent:
                     error=last_error,
                     query=query,
                     schema_context=context,
+                    cost_tracker=self.cost_tracker,
                 )
                 log("", f"📝 Fixed code generated ({len(code.splitlines())} lines).")
 
-        # All attempts exhausted
-        log("error", f"❌ All {MAX_ATTEMPTS} attempts failed. Last error captured.")
+        log("error", f"❌ All {MAX_ATTEMPTS} attempts failed.")
         return {
             "success": False,
             "fig": None,
             "code": code,
             "attempts": attempt,
             "last_error": last_error,
+            "summary": "",
         }
+
+    def clear_history(self):
+        self.conversation_history = []
