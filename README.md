@@ -55,7 +55,7 @@ Cost Tracker → records tokens + estimated USD per call
 
 | Layer | Technology |
 |---|---|
-| LLM & Embeddings | Azure OpenAI (GPT-4o + `text-embedding-3-small`) |
+| LLM & Embeddings | Azure OpenAI (GPT-5.1 + `text-embedding-3-small`) |
 | RAG Vector Store | In-memory cosine similarity (NumPy) — disk-cached embeddings (pickle) |
 | Agent Orchestration | Custom Python orchestrator (`AnalystAgent`) |
 | Visualisation | Plotly Express / Plotly Graph Objects |
@@ -127,20 +127,25 @@ pip install -r requirements.txt
 
 ### 3. Configure Azure credentials
 
-Create a `.env` file in the project root:
+A `.example.env` file is included in the repo as a template. Copy it to `.env` and fill in your values:
+
+```bash
+cp .example.env .env
+```
+
+Then open `.env` and replace the placeholders:
 
 ```env
-AZURE_OPENAI_API_KEY="your-azure-api-key"
+AZURE_OPENAI_API_KEY="your-actual-azure-api-key"
 AZURE_OPENAI_ENDPOINT="https://your-resource.cognitiveservices.azure.com"
 AZURE_EMBEDDING_DEPLOYMENT="text-embedding-3-small"
-AZURE_LLM_DEPLOYMENT="gpt-4o"
+AZURE_LLM_DEPLOYMENT="gpt-5.1"
+APP_PASSWORD="your-app-password"   # optional — enables login gate
 ```
 
-> Credentials auto-load on startup and pre-fill the sidebar. You can also enter or override them directly in the UI. An optional `APP_PASSWORD` env var enables the password auth gate.
-
-```env
-APP_PASSWORD="your-app-password"   # optional
-```
+> **Never commit `.env` to git.** It is already listed in `.gitignore`. The `.example.env` file is safe to commit — it contains only placeholder values, no real secrets.
+>
+> Credentials auto-load on startup and pre-fill the sidebar. You can also enter or override them directly in the UI.
 
 ### 4. Run the app
 
@@ -268,7 +273,7 @@ Pricing reference (as of 2024):
 
 | Model | Input | Output |
 |---|---|---|
-| gpt-4o | $2.50 / 1M tokens | $10.00 / 1M tokens |
+| gpt-5.1 | $2.50 / 1M tokens | $10.00 / 1M tokens |
 | text-embedding-3-small | $0.02 / 1M tokens | — |
 
 The sidebar shows a live running total (`$0.0034 · 1,234 tokens`) with a Reset button.

@@ -2,7 +2,7 @@
 API Cost Tracker — tracks token usage and estimated USD cost for Azure OpenAI calls.
 
 Pricing (as of 2024):
-  gpt-4o:                $2.50 / 1M input tokens,  $10.00 / 1M output tokens
+  gpt-5.1:               $2.50 / 1M input tokens,  $10.00 / 1M output tokens
   text-embedding-3-small: $0.02 / 1M input tokens
 """
 
@@ -13,7 +13,7 @@ from typing import Optional
 
 # ── Pricing table (USD per 1M tokens) ────────────────────────────────────────
 MODEL_PRICING: dict[str, dict] = {
-    "gpt-4o": {
+    "gpt-5.1": {
         "input":  2.50,
         "output": 10.00,
     },
@@ -43,7 +43,7 @@ class CostTracker:
 
     Usage:
         tracker = CostTracker()
-        tracker.record("gpt-4o", input_tokens=500, output_tokens=200, operation="generate")
+        tracker.record("gpt-5.1", input_tokens=500, output_tokens=200, operation="generate")
         print(tracker.total_cost)   # → 0.000xxx
         print(tracker.total_tokens) # → 700
     """
@@ -62,7 +62,7 @@ class CostTracker:
     ) -> float:
         """
         Record a single API call and return the estimated cost (USD) for that call.
-        model: deployment name, e.g. "gpt-4o" or "text-embedding-3-small"
+        model: deployment name, e.g. "gpt-5.1" or "text-embedding-3-small"
         """
         pricing = self._get_pricing(model)
         cost = (

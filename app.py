@@ -489,7 +489,7 @@ hr {{ border-color:rgba(255,255,255,0.06) !important; }}
 ENV_API_KEY   = os.getenv("AZURE_OPENAI_API_KEY", "")
 ENV_ENDPOINT  = os.getenv("AZURE_OPENAI_ENDPOINT", "")
 ENV_EMBEDDING = os.getenv("AZURE_EMBEDDING_DEPLOYMENT", "text-embedding-3-small")
-ENV_LLM       = os.getenv("AZURE_LLM_DEPLOYMENT", "gpt-4o")
+ENV_LLM       = os.getenv("AZURE_LLM_DEPLOYMENT", "gpt-5.1")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SIDEBAR
